@@ -1,0 +1,9 @@
+[versions]
+loom = "1.16.1"
+checkstyle = "10.20.1"
+junit = "5.11.4"
+gitversion = "1.0.0"
+
+[plugins]
+fabric-loom = { id = "net.fabricmc.fabric-loom-remap", version.ref = "loom" }
+gitversion = { id = "com.palantir.git-version", version.ref = "gitversion" }

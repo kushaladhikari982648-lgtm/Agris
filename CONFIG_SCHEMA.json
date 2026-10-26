@@ -1,0 +1,181 @@
+{
+  "mod_id": "agris",
+  "schema_version": 2,
+  "option_count": 29,
+  "options": [
+    {
+      "key": "general.enabled",
+      "group": "general",
+      "kind": "bool",
+      "default": "false"
+    },
+    {
+      "key": "general.shader_pack",
+      "group": "general",
+      "kind": "string",
+      "default": "(agris-mobile)"
+    },
+    {
+      "key": "general.profile",
+      "group": "general",
+      "kind": "string",
+      "default": ""
+    },
+    {
+      "key": "general.notify_conflicts",
+      "group": "general",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "shadow.enabled",
+      "group": "shadow",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "shadow.resolution_scale",
+      "group": "shadow",
+      "kind": "intRange",
+      "default": "100"
+    },
+    {
+      "key": "shadow.max_distance",
+      "group": "shadow",
+      "kind": "intRange",
+      "default": "8"
+    },
+    {
+      "key": "shadow.entities",
+      "group": "shadow",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "shadow.block_entities",
+      "group": "shadow",
+      "kind": "bool",
+      "default": "false"
+    },
+    {
+      "key": "shadow.translucent",
+      "group": "shadow",
+      "kind": "bool",
+      "default": "false"
+    },
+    {
+      "key": "quality.render_scale",
+      "group": "quality",
+      "kind": "intRange",
+      "default": "85"
+    },
+    {
+      "key": "quality.max_draw_buffers",
+      "group": "quality",
+      "kind": "intRange",
+      "default": "0"
+    },
+    {
+      "key": "quality.hand_depth",
+      "group": "quality",
+      "kind": "bool",
+      "default": "false"
+    },
+    {
+      "key": "quality.old_lighting",
+      "group": "quality",
+      "kind": "enumerated",
+      "default": "LightingMode.AUTO"
+    },
+    {
+      "key": "mobile.mode",
+      "group": "mobile",
+      "kind": "enumerated",
+      "default": "MobileMode.AUTO"
+    },
+    {
+      "key": "mobile.dynamic_scale",
+      "group": "mobile",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "mobile.target_fps",
+      "group": "mobile",
+      "kind": "intRange",
+      "default": "60"
+    },
+    {
+      "key": "mobile.min_scale",
+      "group": "mobile",
+      "kind": "intRange",
+      "default": "60"
+    },
+    {
+      "key": "mobile.shadow_cadence",
+      "group": "mobile",
+      "kind": "intRange",
+      "default": "0"
+    },
+    {
+      "key": "mobile.half_bandwidth_hdr",
+      "group": "mobile",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "mobile.tile_discard",
+      "group": "mobile",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "mobile.strip_unused_buffers",
+      "group": "mobile",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "aetherium.integrate_ui",
+      "group": "aetherium",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "aetherium.suspend_cull_in_shadows",
+      "group": "aetherium",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "aetherium.defer_color_filter",
+      "group": "aetherium",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "aetherium.bridge_dynamic_lights",
+      "group": "aetherium",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "aetherium.android_safe_glsl",
+      "group": "aetherium",
+      "kind": "bool",
+      "default": "true"
+    },
+    {
+      "key": "debug.log_shaders",
+      "group": "debug",
+      "kind": "bool",
+      "default": "false"
+    },
+    {
+      "key": "debug.show_hud_tag",
+      "group": "debug",
+      "kind": "bool",
+      "default": "true"
+    }
+  ]
+}

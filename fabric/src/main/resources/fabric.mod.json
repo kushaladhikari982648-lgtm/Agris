@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "${mod_id}",
+  "version": "${version}",
+  "name": "${mod_name}",
+  "description": "${mod_description}",
+  "authors": [
+    "Agris contributors"
+  ],
+  "contact": {
+    "homepage": "${mod_homepage}",
+    "sources": "${mod_sources}",
+    "issues": "${mod_issue_tracker}"
+  },
+  "license": "${mod_license}",
+  "icon": "assets/agris/icon.png",
+  "environment": "client",
+  "provides": [
+    "iris"
+  ],
+  "entrypoints": {
+    "client": [
+      "com.agris.fabric.AgrisFabric"
+    ],
+    "modmenu": [
+      "com.agris.fabric.AgrisModMenu"
+    ]
+  },
+  "mixins": [
+    "agris-common.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "${minecraft_version}"
+  },
+  "suggests": {
+    "aetherium": "*"
+  }
+}

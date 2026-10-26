@@ -1,0 +1,42 @@
+name: Build & Verify Agris (Fabric 1.20.1)
+
+on:
+  push:
+    branches: [ main, "arena/**" ]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17 (MC 1.20.1 toolchain) & Java 21 (Gradle 9 daemon)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run static mixin & hygiene checks (Fabric 1.20.1)
+        run: python3 tools/mixincheck.py 1.20.1 --quiet
+
+      - name: Build Common & Fabric 1.20.1 jars + JUnit 5
+        run: ./gradlew check build --no-daemon
+
+      - name: Upload built Fabric 1.20.1 mod jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: agris-fabric-1.20.1-jar
+          path: |
+            fabric/build/libs/*.jar
+            !**/build/libs/*-sources.jar
+            !**/build/libs/*-dev.jar

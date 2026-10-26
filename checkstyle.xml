@@ -1,0 +1,178 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  Aetherium's checkstyle rules. Deliberately narrow: the build must fail on the
+  things that actually hurt a renderer mod (a swallowed exception in a GL path,
+  a mutable collection published across threads without a comment, a tab/space
+  mix that makes a delta patch fail to apply) and stay quiet about style taste.
+
+  Why no line-length rule at 80/100: the mixin classes carry long target
+  descriptors, and wrapping them is how you lose the ability to grep a target
+  name out of the source. The limit is 140 and enforced by .editorconfig for
+  editors, which is where it belongs.
+
+  Why spaces (the opposite of the Fabric/NeoForge house style): see the comment in
+  .editorconfig. Column-exact alignment inside @At(target = ...) strings is what
+  lets a 32-version delta patch apply cleanly; a tab would move those columns.
+-->
+<module name="Checker">
+  <property name="charset" value="UTF-8"/>
+  <property name="severity" value="error"/>
+  <property name="fileExtensions" value="java"/>
+
+  <!-- Every file ends with a newline: `git apply` in deltas/ depends on it. -->
+  <module name="NewlineAtEndOfFile">
+    <property name="lineSeparator" value="lf_cr_crlf"/>
+  </module>
+
+  <!-- Tabs are banned outright, in .java, for the reason recorded in
+  .editorconfig: mixin injection descriptors are aligned by column, and a tab makes
+  that alignment depend on the reader's tab width, which in turn makes a delta
+  patch in deltas/ apply or not apply by accident. -->
+  <module name="FileTabCharacter">
+    <property name="eachLine" value="true"/>
+    <property name="fileExtensions" value="java"/>
+    <message key="containsTab" value="A Java file contains a tab character. Use 4 spaces for indentation and column alignment (see .editorconfig)."/>
+  </module>
+
+  <module name="RegexpSingleline">
+    <property name="format" value="^\s*//\s*(TODO|FIXME|XXX)\b"/>
+    <property name="message" value="TODO/FIXME comments are not a plan. Either implement it, or file an issue and reference it from the code."/>
+    <property name="severity" value="error"/>
+  </module>
+
+  <module name="RegexpSingleline">
+    <property name="format" value="(//\s*(logic here|same as above|\.\.\.)|\.\.\.\s*;)"/>
+    <property name="message" value="Placeholder body detected. Aetherium ships complete implementations; an elided method is a build failure."/>
+    <property name="severity" value="error"/>
+  </module>
+
+  <module name="RegexpMultiline">
+    <property name="format" value="catch\s*\(\s*\w+\s+\w+\s*\)\s*\{\s*\}"/>
+    <property name="message" value="Empty catch block. Swallowing an exception in a render path is how a missing chunk becomes a mystery; log at dev level at minimum."/>
+    <property name="severity" value="error"/>
+  </module>
+
+  <module name="RegexpMultiline">
+    <property name="format" value="catch\s*\(\s*(Exception|Throwable)\s+\w+\s*\)\s*\{\s*(//[^\n]*)?\s*(throw|return)\s*[a-z]"/>
+    <property name="message" value="Broad catch with an untyped rethrow/return. Catch the narrowest type that can occur, and say which one in the comment."/>
+    <property name="severity" value="warning"/>
+  </module>
+
+  <module name="TreeWalker">
+    <module name="OuterTypeFilename"/>
+    <module name="IllegalTokenText">
+      <property name="tokens" value="STRING_LITERAL, CHAR_LITERAL"/>
+      <property name="format" value="\\u00(09|0(a|A)|0(c|C)|0(d|D)|22|27|5(C|c))|\\(0(10|11|12|14|15|42|47)|134)"/>
+      <property name="message" value="Avoid unicode escapes for whitespace that can be written literally."/>
+    </module>
+
+    <!-- Naming: the mixin handlers all use the aetherium$ prefix, which is how a
+         crash log identifies whose method is in the stack. -->
+    <module name="MethodName">
+      <property name="format" value="^[a-z][a-zA-Z0-9_]*$"/>
+    </module>
+    <module name="LocalVariableName"/>
+    <module name="ParameterName"/>
+    <module name="MemberName">
+      <property name="format" value="^[a-z][a-zA-Z0-9_]*$"/>
+    </module>
+    <module name="StaticVariableName"/>
+    <module name="ConstantName"/>
+    <module name="TypeName"/>
+    <module name="PackageName">
+      <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+    </module>
+
+    <module name="AvoidStarImport"/>
+    <module name="UnusedImports"/>
+    <module name="RedundantImport"/>
+    <module name="CustomImportOrder">
+      <!-- java, javax, everything else, com.aetherium, net.minecraft, org.spongepowered:
+           the grouping is what makes an engine/GUI file readable at a glance, and
+           the delta patches rely on stable blocks to apply on 33 versions. -->
+      <property name="customImportOrderRules"
+                value="STATIC###STANDARD_JAVA_PACKAGE###THIRD_PARTY_PACKAGE###SPECIAL_IMPORTS"/>
+      <property name="specialImportsRegExp" value="^(com\.aetherium|net\.minecraft|org\.spongepowered)"/>
+      <property name="sortImportsInGroupAlphabetically" value="true"/>
+      <property name="separateLineBetweenGroups" value="true"/>
+    </module>
+
+    <module name="FinalClass"/>
+    <module name="HideUtilityClassConstructor"/>
+    <module name="InterfaceIsType"/>
+    <module name="OneStatementPerLine"/>
+    <module name="MultipleVariableDeclarations"/>
+    <module name="ArrayTypeStyle"/>
+    <module name="UpperEll"/>
+    <module name="ModifierOrder"/>
+    <module name="EmptyLineSeparator">
+      <property name="allowNoEmptyLineBetweenFields" value="true"/>
+      <property name="tokens" value="IMPORT,CLASS_DEF,INTERFACE_DEF,ENUM_DEF,STATIC_INIT,INSTANCE_INIT,METHOD_DEF,CTOR_DEF,VARIABLE_DEF"/>
+    </module>
+
+    <module name="EqualsHashCode"/>
+    <module name="StringLiteralEquality"/>
+    <module name="SimplifyBooleanExpression"/>
+    <module name="SimplifyBooleanReturn"/>
+    <module name="DefaultComesLast"/>
+    <module name="FallThrough"/>
+    <module name="MissingSwitchDefault"/>
+    <module name="NoFinalizer"/>
+    <module name="OverloadMethodsDeclarationOrder"/>
+    <module name="VariableDeclarationUsageDistance">
+      <property name="allowedDistance" value="8"/>
+      <property name="severity" value="warning"/>
+    </module>
+
+    <!-- A renderer hands buffers between threads; a field published to another
+         thread must say what guards it. This is enforced by documentation rule
+         rather than a checkstyle one (a mechanical rule cannot tell a lock from a
+         queue), and tools/check.py greps the public mutable classes for the word
+         "Guarded"/"thread" in their javadoc instead. -->
+    <module name="JavadocMethod">
+      <property name="accessModifiers" value="public"/>
+      <property name="allowMissingParamTags" value="true"/>
+      <property name="allowMissingReturnTag" value="true"/>
+      <property name="allowedAnnotations" value="Override, Test, BeforeEach, AfterEach, BeforeAll, AfterAll, SubscribeEvent, Inject, ModifyVariable, Redirect, Shadow, Dynamic"/>
+      <property name="severity" value="warning"/>
+    </module>
+    <module name="MissingJavadocMethod">
+      <property name="scope" value="public"/>
+      <property name="allowedAnnotations" value="Override, Test, BeforeEach, AfterEach, BeforeAll, AfterAll"/>
+      <property name="severity" value="warning"/>
+    </module>
+    <module name="MissingJavadocType">
+      <property name="scope" value="public"/>
+      <property name="severity" value="warning"/>
+    </module>
+    <module name="NonEmptyAtclauseDescription">
+      <property name="severity" value="warning"/>
+    </module>
+
+    <module name="LeftCurly"/>
+    <module name="RightCurly">
+      <property name="option" value="same"/>
+      <property name="tokens" value="LITERAL_TRY, LITERAL_CATCH, LITERAL_FINALLY, LITERAL_IF, LITERAL_ELSE, LITERAL_DO"/>
+    </module>
+    <module name="NeedBraces">
+      <property name="allowSingleLineStatement" value="true"/>
+    </module>
+    <module name="WhitespaceAround">
+      <property name="allowEmptyConstructors" value="true"/>
+      <property name="allowEmptyMethods" value="true"/>
+      <property name="allowEmptyLambdas" value="true"/>
+      <property name="allowEmptyLoopBodies" value="true"/>
+    </module>
+    <module name="ParenPad"/>
+    <module name="NoWhitespaceBeforeCaseDefaultColon"/>
+    <module name="Indentation">
+      <property name="basicOffset" value="4"/>
+      <property name="lineWrappingIndentation" value="4"/>
+      <property name="forceStrictCondition" value="false"/>
+      <property name="severity" value="warning"/>
+    </module>
+  </module>
+</module>
