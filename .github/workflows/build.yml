@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          gradle --no-daemon --console=plain --stacktrace :common:build :fabric:build :common:test 2>&1 | tee "$RUNNER_TEMP/build.log"
+          gradle --no-daemon --console=plain :common:build :fabric:build :common:test 2>&1 | tee "$RUNNER_TEMP/build.log"
           ls -lh fabric/build/libs/
 
       - name: Surface failure details as check annotations
@@ -51,9 +51,21 @@ jobs:
         shell: bash
         run: |
           if [ -f "$RUNNER_TEMP/build.log" ]; then
-            filtered=$(grep -v -E "(unknown enum constant EnvType|Cannot find annotation method .*Environment)" "$RUNNER_TEMP/build.log" | tail -n 55)
-            body=$(printf '%s\n' "$filtered" | sed -e 's/%/%25/g' | tr -d '\r' | awk '{printf "%s%%0A", $0}')
-            printf '::error::%s\n' "$body"
+            errs=$(awk '/^\* What went wrong:/{f=1} f{print} /^\* Try:/{if(f)exit}' \
+              "$RUNNER_TEMP/build.log" 2>/dev/null | head -70 |
+              sed -e 's/%/%25/g' | tr -d '\r' | awk '{printf "%s%%0A", $0}' || true)
+            if [ -n "$errs" ]; then
+              printf '::error::gradle failure:%s\n' "$errs"
+            fi
+            awk '/: (error|warning):/{c=6} c>0{print; c--}' "$RUNNER_TEMP/build.log" 2>/dev/null |
+              grep -v -E "(unknown enum constant EnvType|Cannot find annotation method .*Environment)" |
+              sed -e 's/%/%25/g' | head -80 | tr -d '\r' > "$RUNNER_TEMP/errors.txt" || true
+            if [ -s "$RUNNER_TEMP/errors.txt" ]; then
+              body=$(sed -e 's/$/%0A/' "$RUNNER_TEMP/errors.txt" | tr -d '\n')
+              printf '::error::compiler diagnostics:%s\n' "$body"
+            fi
+            tail_body=$(tail -n 45 "$RUNNER_TEMP/build.log" | sed -e 's/%/%25/g' | tr -d '\r' | awk '{printf "%s%%0A", $0}')
+            printf '::error::log tail:%s\n' "$tail_body"
           fi
 
       - name: Upload built Fabric 1.20.1 mod jar
