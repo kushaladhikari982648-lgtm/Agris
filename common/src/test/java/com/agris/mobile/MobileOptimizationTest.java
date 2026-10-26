@@ -140,7 +140,10 @@ public final class MobileOptimizationTest {
                 InternalTextureFormat.RGBA16F.mobileBandwidthCompact(true));
 
         // Verify standalone distributable shaderpacks/Agris-Pocket-Ultra-Mobile.zip loads cleanly
-        final Path standaloneZip = Path.of("shaderpacks", "Agris-Pocket-Ultra-Mobile.zip");
+        Path standaloneZip = Path.of("shaderpacks", "Agris-Pocket-Ultra-Mobile.zip");
+        if (!Files.isRegularFile(standaloneZip)) {
+            standaloneZip = Path.of("..", "shaderpacks", "Agris-Pocket-Ultra-Mobile.zip");
+        }
         assertTrue(Files.isRegularFile(standaloneZip), "Standalone Agris-Pocket-Ultra-Mobile.zip must exist");
         final ShaderPack zipPack = ShaderPack.load(
                 ShaderPackSource.fromZip(standaloneZip), Map.of("SHADOW_TAPS", "2"), "en_us");
