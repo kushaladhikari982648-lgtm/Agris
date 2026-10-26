@@ -25,6 +25,8 @@ dependencies {
     minecraft("com.mojang:minecraft:${project.property("minecraft_version")}")
     mappings(loom.officialMojangMappings())
 
+    modCompileOnly("net.fabricmc:fabric-loader:${project.property("fabric_loader_version")}")
+
     compileOnly("net.fabricmc:sponge-mixin:${project.property("sponge_mixin_version")}")
     annotationProcessor("net.fabricmc:sponge-mixin:${project.property("sponge_mixin_version")}")
 
@@ -41,16 +43,4 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-tasks.processResources {
-    val props = mapOf(
-        "version" to project.property("mod_version"),
-        "minecraft_version" to project.property("minecraft_version"),
-        "mod_id" to project.property("mod_id"),
-        "mod_name" to project.property("mod_name"),
-    )
-    filesMatching(listOf("**/*.json", "**/*.toml", "META-INF/*.services")) {
-        expand(props)
-    }
 }

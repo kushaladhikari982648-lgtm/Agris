@@ -51,7 +51,8 @@ jobs:
         shell: bash
         run: |
           if [ -f "$RUNNER_TEMP/build.log" ]; then
-            body=$(tail -n 65 "$RUNNER_TEMP/build.log" | sed -e 's/%/%25/g' | tr -d '\r' | awk '{printf "%s%%0A", $0}')
+            filtered=$(grep -v -E "(unknown enum constant EnvType|Cannot find annotation method .*Environment)" "$RUNNER_TEMP/build.log" | tail -n 55)
+            body=$(printf '%s\n' "$filtered" | sed -e 's/%/%25/g' | tr -d '\r' | awk '{printf "%s%%0A", $0}')
             printf '::error::%s\n' "$body"
           fi
 
@@ -65,18 +66,21 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[release]')) }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ inputs.release_tag }}"
-          if [ -z "$TAG" ]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
           MOD_VER=$(sed -n 's/^mod_version=//p' gradle.properties | tr -d '[:space:]')
           MC_VER=$(sed -n 's/^minecraft_version=//p' gradle.properties | tr -d '[:space:]')
+          TAG="${{ inputs.release_tag }}"
+          if [ -z "$TAG" ] && [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="v${MOD_VER}"
+          fi
 
           mkdir -p release-dist
           cp "fabric/build/libs/agris-fabric-${MOD_VER}+mc${MC_VER}.jar" release-dist/

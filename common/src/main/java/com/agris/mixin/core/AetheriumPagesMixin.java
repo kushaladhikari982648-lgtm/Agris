@@ -21,8 +21,14 @@ import java.util.List;
 @Pseudo
 @Mixin(targets = "com.aetherium.client.AetheriumPages", remap = false)
 public abstract class AetheriumPagesMixin {
-    @Inject(method = "build", at = @At("RETURN"), cancellable = true, remap = false, require = 0)
-    private void agris$appendShadersTab(final CallbackInfoReturnable<List<?>> cir) {
+    @Inject(
+            method = "build()Ljava/util/List;",
+            at = @At("RETURN"),
+            cancellable = true,
+            remap = false,
+            require = 0
+    )
+    private static void agris$appendShadersTab(final CallbackInfoReturnable<List<?>> cir) {
         AgrisClientHooks.ensureClientWired();
         final List<?> updated = AetheriumTabInjector.appendShadersPage(
                 cir.getReturnValue(),
