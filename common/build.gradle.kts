@@ -28,10 +28,7 @@ dependencies {
     modCompileOnly("net.fabricmc:fabric-loader:${project.property("fabric_loader_version")}")
 
     compileOnly("net.fabricmc:sponge-mixin:${project.property("sponge_mixin_version")}")
-    annotationProcessor("net.fabricmc:sponge-mixin:${project.property("sponge_mixin_version")}")
-
     compileOnly("io.github.llamalad7:mixinextras-common:${project.property("mixin_extras_version")}")
-    annotationProcessor("io.github.llamalad7:mixinextras-common:${project.property("mixin_extras_version")}")
 
     compileOnly("org.lwjgl:lwjgl:${project.property("lwjgl_version")}")
     compileOnly("org.lwjgl:lwjgl-opengl:${project.property("lwjgl_version")}")

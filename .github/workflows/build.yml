@@ -89,8 +89,9 @@ jobs:
           fi
           cp shaderpacks/Agris-Pocket-Ultra-Mobile.zip release-dist/
 
-          # Verify the remapped production Fabric jar contains fabric.mod.json and compiled classes
+          # Verify the remapped production Fabric jar contains fabric.mod.json and Intermediary-remapped Mixins
           unzip -l "release-dist/agris-fabric-${MOD_VER}+mc${MC_VER}.jar" | grep -q "fabric.mod.json"
+          javap -cp "release-dist/agris-fabric-${MOD_VER}+mc${MC_VER}.jar" -v com.agris.mixin.core.LevelRendererMixin | grep -q -E "method_[0-9]+"
 
           (cd release-dist && sha256sum * > SHA256SUMS.txt)
           ls -lh release-dist/

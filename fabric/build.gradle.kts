@@ -54,7 +54,6 @@ dependencies {
     modCompileOnly("net.fabricmc.fabric-api:fabric-api:${project.property("fabric_api_version")}")
 
     compileOnly("io.github.llamalad7:mixinextras-common:${project.property("mixin_extras_version")}")
-    annotationProcessor("io.github.llamalad7:mixinextras-common:${project.property("mixin_extras_version")}")
     include("io.github.llamalad7:mixinextras-fabric:${project.property("mixin_extras_version")}")
 
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
