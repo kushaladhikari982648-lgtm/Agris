@@ -33,7 +33,6 @@ subprojects {
 
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
-        options.release = project.property("java_version").toString().toInt()
         options.compilerArgs.addAll(listOf("-Xlint:all,-serial,-processing", "-parameters"))
     }
 

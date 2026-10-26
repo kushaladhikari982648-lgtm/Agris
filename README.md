@@ -1,6 +1,14 @@
-# Agris
+# Agris `v1.0.0` (Fabric 1.20.1)
 
 **Agris** is a **mobile-optimized**, Iris- and OptiFine-compatible OpenGL shader mod built specifically for [**Aetherium**](https://github.com/entitybrian69-bit/aetherium) on **Fabric 1.20.1** (Java **17**).
+
+### Release `v1.0.0` — Downloads (Fabric 1.20.1)
+
+| Artifact | Description |
+| --- | --- |
+| [**`agris-fabric-1.0.0+mc1.20.1.jar`**](https://github.com/kushaladhikari982648-lgtm/Agris/releases/tag/v1.0.0) | Production Fabric **1.20.1** mod jar (Fabric Loader `>=0.14.24`, Java `>=17`, zero Sodium required). Place in `.minecraft/mods/` alongside Aetherium or standalone. |
+| [**`Agris-Pocket-Ultra-Mobile.zip`**](https://github.com/kushaladhikari982648-lgtm/Agris/releases/tag/v1.0.0) | Standalone zero-spill mobile TBDR shader pack (also bundled inside the mod jar as `(agris-mobile)`). |
+| [**`agris-fabric-1.0.0+mc1.20.1-sources.jar`**](https://github.com/kushaladhikari982648-lgtm/Agris/releases/tag/v1.0.0) | Full Java 17 source archive. |
 
 Unlike standalone Iris or Oculus — which require Sodium and therefore force Aetherium to delegate its own chunk/rendering pipeline — **Agris runs directly on Aetherium + vanilla OpenGL with zero Sodium dependency**, keeping Aetherium 100% active while adding a Tile-Based Deferred Rendering (**TBDR**) mobile shader engine, dynamic FPS resolution scaling, camera-locked shadow interleaving, Android GL translator adaptation (`GL4ES`, `MobileGlues`, `GLES 3.0`, `Zink`, `LTW`), and four built-in shader packs led by **Agris Pocket Ultra (Mobile)**.
 

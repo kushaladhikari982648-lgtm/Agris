@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.fabric.loom)
 }
 
+version = "${project.property("mod_version")}+mc${project.property("minecraft_version")}"
+
 base {
     archivesName = "${project.property("archives_base_name")}-fabric"
 }
@@ -12,6 +14,7 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(project.property("java_version").toString().toInt())
     }
+    withSourcesJar()
 }
 
 val commonJava = file("../common/src/main/java")
@@ -25,16 +28,15 @@ sourceSets {
 }
 
 loom {
-    mixin {
-        useLegacyMixinAp = false
+    mods {
+        create("agris") {
+            sourceSet(sourceSets["main"])
+        }
     }
     if (project.property("agris.enableRunConfigs").toString().toBoolean()) {
         runs {
-            named("client") {
+            create("client") {
                 client()
-                configName = "Fabric Client"
-                ideConfigGenerated(true)
-                runDir("run")
             }
         }
     }
@@ -46,7 +48,7 @@ repositories {
 
 dependencies {
     minecraft("com.mojang:minecraft:${project.property("minecraft_version")}")
-    mappings(loom.layered { officialMojangMappings() })
+    mappings(loom.officialMojangMappings())
 
     modImplementation("net.fabricmc:fabric-loader:${project.property("fabric_loader_version")}")
     modCompileOnly("net.fabricmc.fabric-api:fabric-api:${project.property("fabric_api_version")}")
@@ -78,7 +80,7 @@ tasks.processResources {
     }
 }
 
-tasks.named<Jar>("jar") {
+tasks.withType<Jar>().configureEach {
     exclude("com/terraformersmc/**")
 }
 
