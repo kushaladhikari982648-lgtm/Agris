@@ -203,7 +203,7 @@ public final class BuiltinShaderPacks {
                     float horizon = clamp(1.0 - abs(dir.y), 0.0, 1.0);
                     vec3 baseSky = mix(skyColor, fogColor, horizon * horizon);
                     vec3 mieGlow = vec3(1.0, 0.68, 0.36) * pow(mu, 8.0) * 0.35 * (1.0 - rainStrength * 0.8);
-                    gl_FragData[0] = vec4(max(baseSky + mieGlow, vColor.rgb * 0.25), 0.0);
+                    gl_FragData[0] = vec4(max(baseSky + mieGlow, vColor.rgb * 0.25), vColor.a);
                 }
                 """);
 
@@ -227,7 +227,7 @@ public final class BuiltinShaderPacks {
                 void main() {
                     vec4 c = texture2D(texture, vUv) * vColor;
                     if (c.a < 0.02) discard;
-                    gl_FragData[0] = vec4(c.rgb * 1.25, 0.0);
+                    gl_FragData[0] = vec4(c.rgb * 1.25, c.a);
                 }
                 """);
 
@@ -272,9 +272,10 @@ public final class BuiltinShaderPacks {
                     vec4 viewPos = gl_ModelViewMatrix * localPos;
                     vViewDist = length(viewPos.xyz);
 
-                    vec3 viewNormal = normalize(gl_NormalMatrix * gl_Normal);
-                    vec3 lightDir = normalize(shadowLightPosition);
-                    vec3 upDir = normalize(upPosition);
+                    vec3 rawNorm = gl_NormalMatrix * gl_Normal;
+                    vec3 viewNormal = dot(rawNorm, rawNorm) > 1e-6 ? normalize(rawNorm) : vec3(0.0, 1.0, 0.0);
+                    vec3 lightDir = dot(shadowLightPosition, shadowLightPosition) > 1e-6 ? normalize(shadowLightPosition) : vec3(0.0, 1.0, 0.0);
+                    vec3 upDir = dot(upPosition, upPosition) > 1e-6 ? normalize(upPosition) : vec3(0.0, 1.0, 0.0);
                     // Soft wrap NdotL keeps foliage and stone pleasingly sculpted on mobile screens
                     vNdotL = clamp(dot(viewNormal, lightDir) * 0.85 + 0.15, 0.0, 1.0);
                     vSkyHemi = dot(viewNormal, upDir) * 0.25 + 0.75;
@@ -376,7 +377,7 @@ public final class BuiltinShaderPacks {
                     if (vEmissive > 0.5) {
                         finalRgb = albedo.rgb * (1.35 * TORCH_INTENSITY);
                     }
-                    gl_FragData[0] = vec4(clamp(finalRgb, 0.0, 1.0), 0.5);
+                    gl_FragData[0] = vec4(clamp(finalRgb, 0.0, 1.0), albedo.a);
                 }
                 """;
 
@@ -401,7 +402,7 @@ public final class BuiltinShaderPacks {
                 #version 120
                 /* RENDERTARGETS: 0 */
                 varying vec4 vColor;
-                void main() { gl_FragData[0] = vec4(vColor.rgb, 0.5); }
+                void main() { gl_FragData[0] = vColor; }
                 """);
 
         files.put("/gbuffers_textured.vsh", """
@@ -456,7 +457,8 @@ public final class BuiltinShaderPacks {
                     vec4 vp = gl_ModelViewMatrix * gl_Vertex;
                     vViewPos = vp.xyz;
                     vWorldPos = (gbufferModelViewInverse * vp).xyz + cameraPosition;
-                    vViewNormal = normalize(gl_NormalMatrix * gl_Normal);
+                    vec3 wn = gl_NormalMatrix * gl_Normal;
+                    vViewNormal = dot(wn, wn) > 1e-6 ? normalize(wn) : vec3(0.0, 1.0, 0.0);
                     gl_Position = gl_ProjectionMatrix * vp;
                 }
                 """);
@@ -746,7 +748,8 @@ public final class BuiltinShaderPacks {
                     vTexCoord = (gl_TextureMatrix[0] * gl_MultiTexCoord0).xy;
                     vLightCoord = clamp((gl_TextureMatrix[1] * gl_MultiTexCoord1).xy, 0.03125, 0.96875);
                     vColor = gl_Color;
-                    vViewNormal = normalize(gl_NormalMatrix * gl_Normal);
+                    vec3 rawN = gl_NormalMatrix * gl_Normal;
+                    vViewNormal = dot(rawN, rawN) > 1e-6 ? normalize(rawN) : vec3(0.0, 1.0, 0.0);
                     vMaterialId = mc_Entity.x;
                     gl_Position = gl_ModelViewProjectionMatrix * pos;
                 }
@@ -769,7 +772,8 @@ public final class BuiltinShaderPacks {
                     if (albedo.a < alphaTestRef) {
                         discard;
                     }
-                    vec3 encNormal = normalize(vViewNormal) * 0.5 + 0.5;
+                    vec3 safeN = dot(vViewNormal, vViewNormal) > 1e-6 ? normalize(vViewNormal) : vec3(0.0, 1.0, 0.0);
+                    vec3 encNormal = safeN * 0.5 + 0.5;
                     float matTag = 0.25;
                     if (abs(vMaterialId - 10001.0) < 0.5) matTag = 0.50;
                     else if (abs(vMaterialId - 10004.0) < 0.5) matTag = 0.90;
@@ -1145,8 +1149,9 @@ public final class BuiltinShaderPacks {
                     vTexCoord = (gl_TextureMatrix[0] * gl_MultiTexCoord0).xy;
                     vLightCoord = clamp((gl_TextureMatrix[1] * gl_MultiTexCoord1).xy, 0.03125, 0.96875);
                     vColor = gl_Color;
-                    vec3 n = normalize(gl_NormalMatrix * gl_Normal);
-                    vec3 l = normalize(shadowLightPosition);
+                    vec3 rawN = gl_NormalMatrix * gl_Normal;
+                    vec3 n = dot(rawN, rawN) > 1e-6 ? normalize(rawN) : vec3(0.0, 1.0, 0.0);
+                    vec3 l = dot(shadowLightPosition, shadowLightPosition) > 1e-6 ? normalize(shadowLightPosition) : vec3(0.0, 1.0, 0.0);
                     vNdotL = clamp(dot(n, l) * 0.35 + 0.72, 0.45, 1.15);
                     gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
                 }

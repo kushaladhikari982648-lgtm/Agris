@@ -180,6 +180,26 @@ public final class ShaderPackSource {
         return this.files.keySet();
     }
 
+    /** Exports this shader pack source into a standard OptiFine/Iris {@code shaders/...} zip archive. */
+    public void exportToZip(final Path outZip) throws IOException {
+        Objects.requireNonNull(outZip, "outZip");
+        final Path parent = outZip.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(
+                Files.newOutputStream(outZip), StandardCharsets.UTF_8)) {
+            for (final Map.Entry<String, byte[]> entry : this.files.entrySet()) {
+                final String rel = entry.getKey().startsWith("/") ? entry.getKey().substring(1) : entry.getKey();
+                final ZipEntry ze = new ZipEntry("shaders/" + rel);
+                ze.setTime(1730073600000L);
+                zos.putNextEntry(ze);
+                zos.write(entry.getValue());
+                zos.closeEntry();
+            }
+        }
+    }
+
     private static String normalizeShadersKey(final String raw) {
         String clean = raw.replace('\\', '/').trim();
         if (clean.startsWith("shaders/")) {

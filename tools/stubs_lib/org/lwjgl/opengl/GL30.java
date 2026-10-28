@@ -22,5 +22,6 @@ public class GL30 {
     public static final int GL_NUM_EXTENSIONS = 0x821D;
     public static final int GL_READ_FRAMEBUFFER = 0x8CA8;
     public static void glGenerateMipmap(int target) { }
+    public static void glVertexAttribI4i(int index, int x, int y, int z, int w) { }
     public static String glGetStringi(int name, int index) { return null; }
 }

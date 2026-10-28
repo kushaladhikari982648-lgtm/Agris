@@ -130,12 +130,30 @@ public final class RenderTargetSet implements AutoCloseable {
         this.activeViewportW = -1;
         this.activeViewportH = -1;
 
-        // Clear depth + configured color buffers at the start of the world frame.
-        for (int i = 0; i < MAX_BUFFERS; i++) {
+        final GlStateSync sync = GlStateSync.current();
+        sync.prepareForClear();
+
+        // Always clear depthtex0 every frame (even when a temporal pack disables colortex0Clear),
+        // and clear each configured colortexN attachment with full color/depth write masks enabled.
+        final int gbuf0 = getOrCreateGbufferFbo(SINGLE_BUFFER_ZERO, true);
+        bindFrameFbo(gbuf0, this.width, this.height);
+        if (this.allocatedBuffer[0] && this.directives.bufferClear(0)) {
+            final float[] clear0 = this.directives.bufferClearColorOrNull(0);
+            if (clear0 != null) {
+                GL11.glClearColor(clear0[0], clear0[1], clear0[2], clear0[3]);
+            } else {
+                GL11.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+            }
+            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+        } else {
+            GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
+        }
+
+        for (int i = 1; i < MAX_BUFFERS; i++) {
             if (!this.allocatedBuffer[i] || !this.directives.bufferClear(i)) {
                 continue;
             }
-            final int fbo = getOrCreateGbufferFbo(i == 0 ? SINGLE_BUFFER_ZERO : new int[]{i}, i == 0);
+            final int fbo = getOrCreateGbufferFbo(new int[]{i}, false);
             bindFrameFbo(fbo, this.width, this.height);
             final float[] clear = this.directives.bufferClearColorOrNull(i);
             if (clear != null) {
@@ -143,7 +161,7 @@ public final class RenderTargetSet implements AutoCloseable {
             } else {
                 GL11.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
             }
-            GL11.glClear(i == 0 ? (GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT) : GL11.GL_COLOR_BUFFER_BIT);
+            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
         }
 
         if (clearShadowThisFrame && this.shadowAllocated && this.shadowFbo != 0) {
@@ -234,6 +252,23 @@ public final class RenderTargetSet implements AutoCloseable {
         this.activeViewportH = -1;
     }
 
+    /** Fallback hardware color blit from {@code colortex0} to {@code dstFbo} when a pack omits {@code final.fsh}. */
+    public void blitColor0ToFramebuffer(final int dstFbo, final int dstW, final int dstH) {
+        final int srcTex = readTexture(0);
+        if (srcTex == 0) {
+            return;
+        }
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, this.copyReadFbo);
+        GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL11.GL_TEXTURE_2D, srcTex, 0);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, dstFbo);
+        GL30.glBlitFramebuffer(0, 0, this.width, this.height, 0, 0, dstW, dstH,
+                GL11.GL_COLOR_BUFFER_BIT, GL11.GL_LINEAR);
+        GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL11.GL_TEXTURE_2D, 0, 0);
+        this.activeFrameFbo = -1;
+    }
+
     /** Copies live {@code depthtex0} into {@code depthtex1} only when {@code depthtex1} is sampled by the pack. */
     public void copyPreTranslucentDepth() {
         if (this.depthtex1 != 0) {
@@ -259,13 +294,14 @@ public final class RenderTargetSet implements AutoCloseable {
         if (bufferIndices == null || bufferIndices.length == 0) {
             return;
         }
+        final GlStateSync sync = GlStateSync.current();
         for (final int idx : bufferIndices) {
             if (idx >= 0 && idx < MAX_BUFFERS && this.allocatedBuffer[idx]) {
-                GL11.glBindTexture(GL11.GL_TEXTURE_2D, readTexture(idx));
+                sync.bindScratchTexture2D(readTexture(idx));
                 GL30.glGenerateMipmap(GL11.GL_TEXTURE_2D);
             }
         }
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        sync.endScratchTexture2D();
     }
 
     public int depthtex0() {
@@ -315,21 +351,27 @@ public final class RenderTargetSet implements AutoCloseable {
     }
 
     private void bindFrameFbo(final int fbo, final int vpW, final int vpH) {
-        if (this.activeFrameFbo != fbo) {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
-            this.activeFrameFbo = fbo;
-        }
-        if (this.activeViewportW != vpW || this.activeViewportH != vpH) {
-            GL11.glViewport(0, 0, vpW, vpH);
-            this.activeViewportW = vpW;
-            this.activeViewportH = vpH;
-        }
+        // Always synchronize through GlStateSync rather than relying solely on a local Java field:
+        // Blaze3D's OutputStateShard.MAIN_TARGET (RenderType.setupRenderState) rebinds mainRenderTarget
+        // between draw layers, so we must unconditionally establish Agris's FBO and viewport here.
+        final GlStateSync sync = GlStateSync.current();
+        sync.bindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+        sync.viewport(0, 0, vpW, vpH);
+        this.activeFrameFbo = fbo;
+        this.activeViewportW = vpW;
+        this.activeViewportH = vpH;
     }
 
     private void allocateAll() {
-        allocateMainTargets();
-        if (this.shadowAllocated) {
-            allocateShadowTargets();
+        final int prevFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        try {
+            allocateMainTargets();
+            if (this.shadowAllocated) {
+                allocateShadowTargets();
+            }
+        } finally {
+            GlStateSync.current().endScratchTexture2D();
+            GlStateSync.current().bindFramebuffer(GL30.GL_FRAMEBUFFER, prevFbo);
         }
     }
 
@@ -376,8 +418,7 @@ public final class RenderTargetSet implements AutoCloseable {
             }
         }
 
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+        GlStateSync.current().endScratchTexture2D();
     }
 
     private void allocateShadowTargets() {
@@ -426,8 +467,7 @@ public final class RenderTargetSet implements AutoCloseable {
             GL20.glDrawBuffers(new int[]{GL11.GL_NONE});
         }
 
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+        GlStateSync.current().endScratchTexture2D();
     }
 
     private int getOrCreateGbufferFbo(final int[] drawBuffers, final boolean withDepth) {
@@ -443,7 +483,7 @@ public final class RenderTargetSet implements AutoCloseable {
             return existing;
         }
         final int fbo = GL30.glGenFramebuffers();
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+        GlStateSync.current().bindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
         this.activeFrameFbo = fbo;
         final int[] attachments = new int[count];
         for (int loc = 0; loc < count; loc++) {
@@ -474,7 +514,7 @@ public final class RenderTargetSet implements AutoCloseable {
             return existing;
         }
         final int fbo = GL30.glGenFramebuffers();
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+        GlStateSync.current().bindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
         this.activeFrameFbo = fbo;
         final int[] attachments = new int[count];
         for (int loc = 0; loc < count; loc++) {
@@ -514,7 +554,7 @@ public final class RenderTargetSet implements AutoCloseable {
                                           final InternalTextureFormat format,
                                           final boolean mipmap) {
         final int tex = GL11.glGenTextures();
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, tex);
+        GlStateSync.current().bindScratchTexture2D(tex);
         final int minFilter = format.isIntegerFormat()
                 ? GL11.GL_NEAREST
                 : (mipmap ? GL11.GL_LINEAR_MIPMAP_LINEAR : GL11.GL_LINEAR);
@@ -530,7 +570,7 @@ public final class RenderTargetSet implements AutoCloseable {
 
     private static int createDepthTexture(final int w, final int h, final boolean hardwareCompare) {
         final int tex = GL11.glGenTextures();
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, tex);
+        GlStateSync.current().bindScratchTexture2D(tex);
         final int filter = hardwareCompare ? GL11.GL_LINEAR : GL11.GL_NEAREST;
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, filter);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, filter);

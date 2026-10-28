@@ -83,8 +83,10 @@ public final class GlslTransformer {
             targetVersion = 300;
             versionHeader = "#version 300 es\n";
         } else {
-            targetVersion = Math.max(330, Math.min(460,
-                    declaredVersion >= 330 && !"compatibility".equals(declaredProfile) ? declaredVersion : 330));
+            // Preserve GLSL >= 330 version numbers even when declared with "compatibility"
+            // (e.g. "#version 400 compatibility" / "#version 430 compatibility" in modern Iris/OptiFine packs)
+            // while switching to Core Profile and rewriting legacy compatibility symbols below.
+            targetVersion = Math.max(330, Math.min(460, declaredVersion >= 330 ? declaredVersion : 330));
             versionHeader = "#version " + targetVersion + " core\n";
         }
 
@@ -176,6 +178,11 @@ public final class GlslTransformer {
 
         // 2. Vertex compatibility attributes -> explicit Core Profile inputs matching VertexFormat.
         if (stage == Stage.VERTEX) {
+            // Upgrade modern Iris core shaders that declare "in vec2 vaUV1" when MC 1.20.1 binds UV1 via glVertexAttribIPointer.
+            if (containsIdentifier(body, "vaUV1") && !declaresIdentifier(body, "vaUV1")) {
+                preamble.append("in ivec2 vaUV1;\n");
+            }
+
             body = body.replaceAll("\\bftransform\\s*\\(\\s*\\)", "(gl_ModelViewProjectionMatrix * gl_Vertex)");
             final boolean usesGlVertex = containsIdentifier(body, "gl_Vertex");
             final boolean usesGlColor = containsIdentifier(body, "gl_Color");

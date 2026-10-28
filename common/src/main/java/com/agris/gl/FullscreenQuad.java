@@ -50,7 +50,8 @@ public final class FullscreenQuad implements AutoCloseable {
         }
         buf.flip();
 
-        GL30.glBindVertexArray(this.vao);
+        final GlStateSync sync = GlStateSync.current();
+        sync.bindVertexArray(this.vao);
         GL15.glBindBuffer(GL_ARRAY_BUFFER, this.vbo);
         GL15.glBufferData(GL_ARRAY_BUFFER, buf, GL_STATIC_DRAW);
 
@@ -61,33 +62,16 @@ public final class FullscreenQuad implements AutoCloseable {
         GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, STRIDE, 3L * Float.BYTES);
 
         GL15.glBindBuffer(GL_ARRAY_BUFFER, 0);
-        GL30.glBindVertexArray(0);
+        sync.unbindVertexArray();
     }
 
     public void draw() {
-        final boolean depthWasEnabled = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
-        final boolean blendWasEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
-        final boolean cullWasEnabled = GL11.glIsEnabled(GL11.GL_CULL_FACE);
-
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthMask(false);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_CULL_FACE);
-
-        GL30.glBindVertexArray(this.vao);
+        final GlStateSync sync = GlStateSync.current();
+        sync.prepareFullscreenQuadState();
+        sync.bindVertexArray(this.vao);
         GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, 6);
-        GL30.glBindVertexArray(0);
-
-        GL11.glDepthMask(true);
-        if (depthWasEnabled) {
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
-        }
-        if (blendWasEnabled) {
-            GL11.glEnable(GL11.GL_BLEND);
-        }
-        if (cullWasEnabled) {
-            GL11.glEnable(GL11.GL_CULL_FACE);
-        }
+        sync.unbindVertexArray();
+        sync.restoreAfterFullscreenQuad();
     }
 
     @Override

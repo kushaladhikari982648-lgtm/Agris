@@ -231,6 +231,13 @@ public final class UniformState {
         evaluateCustomUniforms(directives);
     }
 
+    private static final float[] FULLSCREEN_ORTHO_01 = {
+            2.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 2.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, -1.0f, 0.0f,
+            -1.0f, -1.0f, 0.0f, 1.0f
+    };
+
     public void setPerDrawMatrices(final float[] mv, final float[] proj, final float[] texMat) {
         System.arraycopy(mv, 0, this.drawModelView, 0, 16);
         MathUtil.invert4(this.drawModelView, this.drawModelViewInverse);
@@ -244,6 +251,39 @@ public final class UniformState {
         } else {
             MathUtil.identity4(this.drawTextureMatrix);
         }
+    }
+
+    /**
+     * Resets per-draw matrices, {@code chunkOffset}, and {@code colorModulator} to the canonical
+     * OptiFine/Iris fullscreen-quad orthographic state ({@code [0..1] x [0..1] -> [-1..+1] x [-1..+1], z=0})
+     * before executing {@code prepare*}, {@code deferred*}, {@code composite*}, or {@code final} passes,
+     * while preserving 3D camera {@code gbufferModelView} / {@code gbufferProjection} untouched.
+     */
+    public void setFullscreenQuadState() {
+        MathUtil.identity4(this.drawModelView);
+        MathUtil.identity4(this.drawModelViewInverse);
+        this.drawNormalMatrix[0] = 1.0f;
+        this.drawNormalMatrix[1] = 0.0f;
+        this.drawNormalMatrix[2] = 0.0f;
+        this.drawNormalMatrix[3] = 0.0f;
+        this.drawNormalMatrix[4] = 1.0f;
+        this.drawNormalMatrix[5] = 0.0f;
+        this.drawNormalMatrix[6] = 0.0f;
+        this.drawNormalMatrix[7] = 0.0f;
+        this.drawNormalMatrix[8] = 1.0f;
+
+        System.arraycopy(FULLSCREEN_ORTHO_01, 0, this.drawProjection, 0, 16);
+        MathUtil.invert4(this.drawProjection, this.drawProjectionInverse);
+        MathUtil.identity4(this.drawTextureMatrix);
+
+        this.chunkOffset[0] = 0.0f;
+        this.chunkOffset[1] = 0.0f;
+        this.chunkOffset[2] = 0.0f;
+
+        this.colorModulator[0] = 1.0f;
+        this.colorModulator[1] = 1.0f;
+        this.colorModulator[2] = 1.0f;
+        this.colorModulator[3] = 1.0f;
     }
 
     public void evaluateCustomUniforms(final PackDirectives directives) {

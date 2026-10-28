@@ -1,11 +1,10 @@
 package com.agris.pipeline;
 
+import com.agris.gl.GlStateSync;
 import com.agris.gl.RenderTargetSet;
 import com.agris.gl.ShaderCompiler;
 import com.agris.glsl.ProgramDirectives;
 import com.agris.pack.PackDirectives;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 
 import java.util.ArrayList;
@@ -264,7 +263,8 @@ public final class CompiledProgramBinding implements AutoCloseable {
                               final int vanillaOverlay1,
                               final int vanillaLightmap2,
                               final float effectiveAlphaRef) {
-        GL20.glUseProgram(this.programId);
+        final GlStateSync sync = GlStateSync.current();
+        sync.useProgram(this.programId);
 
         // Set safe generic vertex attributes for extended Iris slots when a VAO leaves them disabled.
         GL20.glVertexAttrib4f(ShaderCompiler.ATTR_MC_ENTITY, state.entityId >= 0 ? state.entityId : -1.0f, 0.0f, 0.0f, 1.0f);
@@ -404,6 +404,7 @@ public final class CompiledProgramBinding implements AutoCloseable {
         if (this.samplers.length == 0) {
             return;
         }
+        final GlStateSync sync = GlStateSync.current();
         for (final ActiveSampler s : this.samplers) {
             final int texId = switch (s.source()) {
                 case VANILLA_TEX0 -> vanillaTex0;
@@ -420,12 +421,11 @@ public final class CompiledProgramBinding implements AutoCloseable {
                 default -> targets.readTexture(s.source().ordinal() - SamplerSource.COLORTEX_0.ordinal());
             };
             if (texId != 0) {
-                GL13.glActiveTexture(GL13.GL_TEXTURE0 + s.textureUnit());
-                GL11.glBindTexture(GL11.GL_TEXTURE_2D, texId);
+                sync.bindTexture2D(s.textureUnit(), texId);
             }
             GL20.glUniform1i(s.uniformLocation(), s.textureUnit());
         }
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        sync.activeTextureUnit0();
     }
 
     private ActiveSampler[] discoverSamplers(final int maxUnits) {

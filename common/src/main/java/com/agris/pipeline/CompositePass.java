@@ -1,9 +1,9 @@
 package com.agris.pipeline;
 
 import com.agris.gl.FullscreenQuad;
+import com.agris.gl.GlStateSync;
 import com.agris.gl.RenderTargetSet;
 import com.agris.pack.PackDirectives;
-import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 
 /**
@@ -45,18 +45,22 @@ public final class CompositePass implements AutoCloseable {
             targets.generateMipmapsFor(mipInputs);
         }
 
+        final GlStateSync sync = GlStateSync.current();
         final int[] drawBuffers = this.binding.directives().drawBuffers();
         if (this.finalPresentationPass) {
             targets.prepareForFinalPresentation();
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, destinationFbo);
-            org.lwjgl.opengl.GL11.glViewport(0, 0, destWidth, destHeight);
+            sync.bindFramebuffer(GL30.GL_FRAMEBUFFER, destinationFbo);
+            sync.viewport(0, 0, destWidth, destHeight);
         } else {
             targets.bindCompositeWriteFbo(drawBuffers);
         }
 
+        // Reset per-draw matrices & chunkOffset so both ftransform() / gl_ModelViewProjectionMatrix
+        // packs and gl_Vertex.xy * 2.0 - 1.0 packs map the [0..1] fullscreen quad cleanly to [-1..+1].
+        state.setFullscreenQuadState();
         this.binding.bindAndUpload(state, targets, noiseTexId, 0, 0, vanillaLightmapTexId, 0.0f);
         quad.draw();
-        GL20.glUseProgram(0);
+        sync.useProgram(0);
 
         if (!this.finalPresentationPass) {
             for (final int bufIdx : drawBuffers) {

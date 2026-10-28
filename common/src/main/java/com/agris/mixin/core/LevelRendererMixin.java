@@ -38,7 +38,7 @@ public abstract class LevelRendererMixin {
                                         final Matrix4f projection,
                                         final CallbackInfo ci) {
         AgrisClientHooks.onBeginLevelRender(
-                (LevelRenderer) (Object) this, camera, partialTick, poseStack.last().pose(), projection);
+                (LevelRenderer) (Object) this, camera, partialTick, lightTexture, poseStack.last().pose(), projection);
     }
 
     @Inject(

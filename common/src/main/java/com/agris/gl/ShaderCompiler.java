@@ -16,22 +16,53 @@ import java.util.Map;
  * {@code agris_FragData0..N} to MRT attachment locations.
  */
 public final class ShaderCompiler {
-    public static final int ATTR_MC_ENTITY = 11;
-    public static final int ATTR_MC_MID_TEX_COORD = 12;
-    public static final int ATTR_AT_TANGENT = 13;
+    public static final int ATTR_FALLBACK_COLOR = 8;
+    public static final int ATTR_FALLBACK_UV0 = 9;
+    public static final int ATTR_FALLBACK_UV1 = 10;
+    public static final int ATTR_FALLBACK_UV2 = 11;
+    public static final int ATTR_FALLBACK_NORMAL = 12;
+    public static final int ATTR_MC_ENTITY = 13;
+    public static final int ATTR_MC_MID_TEX_COORD = 14;
+    public static final int ATTR_AT_TANGENT = 15;
 
     private static final int GL_GEOMETRY_SHADER = 0x8DD9;
 
     private static final Map<String, String> VANILLA_TO_IRIS_ATTR = Map.of(
             "Position", "vaPosition",
             "Color", "vaColor",
+            "UV", "vaUV0",
             "UV0", "vaUV0",
             "UV1", "vaUV1",
             "UV2", "vaUV2",
             "Normal", "vaNormal"
     );
 
+    private static final Map<String, Integer> FALLBACK_IRIS_ATTR_SLOTS = Map.of(
+            "vaColor", ATTR_FALLBACK_COLOR,
+            "vaUV0", ATTR_FALLBACK_UV0,
+            "vaUV1", ATTR_FALLBACK_UV1,
+            "vaUV2", ATTR_FALLBACK_UV2,
+            "vaNormal", ATTR_FALLBACK_NORMAL
+    );
+
     private ShaderCompiler() {
+    }
+
+    /**
+     * Establishes safe non-zero/non-black OpenGL context-global generic vertex attribute values
+     * for disabled VAO attribute slots (e.g., white {@code vaColor} on {@code POSITION_TEX} sun/moon
+     * quads, full lightmap {@code (240, 240)} on unlit draws, and unit {@code +Y} {@code vaNormal}
+     * on particle/weather quads so {@code normalize(gl_NormalMatrix * gl_Normal)} never produces {@code NaN}).
+     */
+    public static void applyDefaultFallbackAttributes() {
+        GL20.glVertexAttrib4f(ATTR_FALLBACK_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+        GL20.glVertexAttrib4f(ATTR_FALLBACK_UV0, 0.0f, 0.0f, 0.0f, 1.0f);
+        GL30.glVertexAttribI4i(ATTR_FALLBACK_UV1, 0, 10, 0, 1);
+        GL30.glVertexAttribI4i(ATTR_FALLBACK_UV2, 240, 240, 0, 1);
+        GL20.glVertexAttrib4f(ATTR_FALLBACK_NORMAL, 0.0f, 1.0f, 0.0f, 0.0f);
+        GL20.glVertexAttrib4f(ATTR_MC_ENTITY, -1.0f, -1.0f, 0.0f, 1.0f);
+        GL20.glVertexAttrib4f(ATTR_MC_MID_TEX_COORD, 0.0f, 0.0f, 0.0f, 1.0f);
+        GL20.glVertexAttrib4f(ATTR_AT_TANGENT, 1.0f, 0.0f, 0.0f, 1.0f);
     }
 
     public static int compileAndLink(final String programName,
@@ -61,7 +92,10 @@ public final class ShaderCompiler {
             }
             GL20.glAttachShader(program, fsh);
 
-            // Bind attribute indices 0..N-1 to match vanilla VertexFormat.getElementAttributeNames() 1-to-1!
+            // Bind attribute indices 0..N-1 to match vanilla VertexFormat.getElementAttributeNames() 1-to-1,
+            // and bind any absent canonical Iris attributes to dedicated fallback slots 8..12 whose default
+            // generic values are pre-populated by applyDefaultFallbackAttributes().
+            final java.util.HashSet<String> boundIrisAliases = new java.util.HashSet<>(8);
             if (vertexAttributeNames != null) {
                 for (int idx = 0; idx < vertexAttributeNames.size(); idx++) {
                     final String vanillaAttr = vertexAttributeNames.get(idx);
@@ -69,12 +103,18 @@ public final class ShaderCompiler {
                     final String irisAlias = VANILLA_TO_IRIS_ATTR.get(vanillaAttr);
                     if (irisAlias != null) {
                         GL20.glBindAttribLocation(program, idx, irisAlias);
+                        boundIrisAliases.add(irisAlias);
                     }
+                }
+            }
+            for (final Map.Entry<String, Integer> entry : FALLBACK_IRIS_ATTR_SLOTS.entrySet()) {
+                if (!boundIrisAliases.contains(entry.getKey())) {
+                    GL20.glBindAttribLocation(program, entry.getValue(), entry.getKey());
                 }
             }
 
             // Bind extended Iris/OptiFine vertex attributes to fixed high slots so default generic
-            // glVertexAttrib4f(11..13, ...) values feed cleanly whenever a VAO leaves them disabled.
+            // glVertexAttrib4f(13..15, ...) values feed cleanly whenever a VAO leaves them disabled.
             GL20.glBindAttribLocation(program, ATTR_MC_ENTITY, "mc_Entity");
             GL20.glBindAttribLocation(program, ATTR_MC_MID_TEX_COORD, "mc_midTexCoord");
             GL20.glBindAttribLocation(program, ATTR_AT_TANGENT, "at_tangent");

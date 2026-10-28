@@ -4,6 +4,7 @@ import com.agris.compat.AetheriumBridge;
 import com.agris.config.AgrisConfig;
 import com.agris.gl.FullscreenQuad;
 import com.agris.gl.GlLimits;
+import com.agris.gl.GlStateSync;
 import com.agris.gl.NoiseTexture;
 import com.agris.gl.PackSamplerUsage;
 import com.agris.gl.RenderTargetSet;
@@ -14,9 +15,6 @@ import com.agris.mobile.MobileFrameGovernor;
 import com.agris.pack.PackDirectives;
 import com.agris.pack.ShaderPack;
 import com.agris.util.AgrisLog;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.opengl.GL30;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -184,6 +182,7 @@ public final class ShaderPipeline implements AutoCloseable {
                 this.pack.directives(), this.effectiveShadowDistance,
                 this.renderShadowThisFrame);
 
+        ShaderCompiler.applyDefaultFallbackAttributes();
         this.targets.beginFrameClears(this.renderShadowThisFrame);
         this.insideWorldFrame = true;
         this.renderingShadowPass = false;
@@ -191,6 +190,9 @@ public final class ShaderPipeline implements AutoCloseable {
         this.handDepthCopiedThisFrame = false;
         this.currentPhase = WorldRenderingPhase.NONE;
         this.currentlyBoundProgram = null;
+        this.uniformState.chunkOffset[0] = 0.0f;
+        this.uniformState.chunkOffset[1] = 0.0f;
+        this.uniformState.chunkOffset[2] = 0.0f;
 
         if (!this.preparePasses.isEmpty()) {
             for (final CompositePass pass : this.preparePasses) {
@@ -208,12 +210,12 @@ public final class ShaderPipeline implements AutoCloseable {
         if (!this.insideWorldFrame || !this.shadowPassAvailable || !this.renderShadowThisFrame || callback == null) {
             return;
         }
+        final GlStateSync sync = GlStateSync.current();
         this.renderingShadowPass = true;
         this.aetheriumBridge.beginShadowPass(this.config);
         try {
+            sync.prepareShadowPassState();
             this.targets.bindShadowFbo();
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
-            GL11.glDepthMask(true);
 
             callback.renderStage(ShadowSceneCallback.Stage.OPAQUE_TERRAIN,
                     this.uniformState.shadowModelView, this.uniformState.shadowProjection);
@@ -232,6 +234,8 @@ public final class ShaderPipeline implements AutoCloseable {
                         this.uniformState.shadowModelView, this.uniformState.shadowProjection);
             }
         } finally {
+            sync.restoreAfterShadowPass();
+            ShaderCompiler.applyDefaultFallbackAttributes();
             this.aetheriumBridge.endShadowPass();
             this.renderingShadowPass = false;
             this.currentPhase = WorldRenderingPhase.NONE;
@@ -273,6 +277,13 @@ public final class ShaderPipeline implements AutoCloseable {
         }
     }
 
+    public void onBeforeVanillaShaderApply() {
+        this.currentlyBoundProgram = null;
+        this.uniformState.chunkOffset[0] = 0.0f;
+        this.uniformState.chunkOffset[1] = 0.0f;
+        this.uniformState.chunkOffset[2] = 0.0f;
+    }
+
     public void onVanillaShaderApply(final String vanillaShaderName,
                                      final List<String> vertexAttributeNames,
                                      final int vanillaTex0,
@@ -281,10 +292,21 @@ public final class ShaderPipeline implements AutoCloseable {
         if (!this.insideWorldFrame) {
             return;
         }
+        this.uniformState.chunkOffset[0] = 0.0f;
+        this.uniformState.chunkOffset[1] = 0.0f;
+        this.uniformState.chunkOffset[2] = 0.0f;
+
         final ProgramId id = ProgramId.resolveForDraw(this.currentPhase, this.renderingShadowPass, vanillaShaderName);
         final CompiledProgramBinding binding = getOrCompileGbuffer(id, vertexAttributeNames);
         if (binding == null) {
             this.currentlyBoundProgram = null;
+            // Even when falling back to a vanilla ShaderInstance inside the world frame,
+            // keep the draw directed into Agris's GBuffer FBO so unoverridden geometry is visible!
+            if (!this.renderingShadowPass) {
+                this.targets.bindDefaultGbufferFbo();
+            } else {
+                this.targets.bindShadowFbo();
+            }
             return;
         }
 
@@ -316,7 +338,7 @@ public final class ShaderPipeline implements AutoCloseable {
         this.uniformState.chunkOffset[2] = dzZero();
         if (this.currentlyBoundProgram != null) {
             this.currentlyBoundProgram = null;
-            GL20.glUseProgram(0);
+            GlStateSync.current().useProgram(0);
         }
     }
 
@@ -348,16 +370,16 @@ public final class ShaderPipeline implements AutoCloseable {
                         this.savedMainFramebufferId, this.savedMainWidth, this.savedMainHeight);
             } else {
                 this.targets.prepareForFinalPresentation();
-                GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.savedMainFramebufferId);
-                GL11.glViewport(0, 0, this.savedMainWidth, this.savedMainHeight);
+                this.targets.blitColor0ToFramebuffer(
+                        this.savedMainFramebufferId, this.savedMainWidth, this.savedMainHeight);
             }
         } finally {
             this.currentlyBoundProgram = null;
             this.insideWorldFrame = false;
             this.renderingShadowPass = false;
             this.currentPhase = WorldRenderingPhase.NONE;
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.savedMainFramebufferId);
-            GL11.glViewport(0, 0, this.savedMainWidth, this.savedMainHeight);
+            GlStateSync.current().restoreMainRenderTarget(
+                    this.savedMainFramebufferId, this.savedMainWidth, this.savedMainHeight);
         }
     }
 

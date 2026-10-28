@@ -26,8 +26,8 @@ public final class NoiseTexture implements AutoCloseable {
         final byte[] raw = generateDeterministicRgba(this.resolution);
         pixels.put(raw).flip();
 
-        final int prev = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureId);
+        final GlStateSync sync = GlStateSync.current();
+        sync.bindScratchTexture2D(this.textureId);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
@@ -35,7 +35,7 @@ public final class NoiseTexture implements AutoCloseable {
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8,
                 this.resolution, this.resolution, 0,
                 GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, pixels);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, prev);
+        sync.endScratchTexture2D();
     }
 
     /** Pure-Java generator (testable without an OpenGL context). */

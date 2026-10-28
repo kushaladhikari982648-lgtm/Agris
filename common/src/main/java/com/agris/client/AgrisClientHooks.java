@@ -1,6 +1,7 @@
 package com.agris.client;
 
 import com.agris.Agris;
+import com.agris.gl.GlStateSync;
 import com.agris.gui.AgrisShaderOptionsScreen;
 import com.agris.gui.AgrisShaderPackScreen;
 import com.agris.mixin.core.LevelRendererInvoker;
@@ -11,10 +12,12 @@ import com.agris.pipeline.ShadowSceneCallback;
 import com.agris.pipeline.UniformState;
 import com.agris.pipeline.WorldRenderingPhase;
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.shaders.FogShape;
 import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexBuffer;
 import net.irisshaders.iris.apiimpl.IrisApiV0Impl;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -22,6 +25,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.core.BlockPos;
@@ -33,8 +37,12 @@ import com.agris.util.MathUtil;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Render-thread bridge connecting Minecraft's {@code LevelRenderer}, {@code GameRenderer},
@@ -42,23 +50,136 @@ import java.util.List;
  * and {@link ShaderPipeline}.
  */
 public final class AgrisClientHooks {
+    private static final int BLAZE3D_TRACKED_TEXTURE_UNITS = 12;
     private static final float[] TMP_MV = new float[16];
     private static final float[] TMP_PROJ = new float[16];
     private static final float[] TMP_TEX = new float[16];
-    private static final float[] STAGED_MAT_0 = new float[16];
-    private static final float[] STAGED_MAT_1 = new float[16];
+    private static final Map<Uniform, float[]> STAGED_MATRICES = new IdentityHashMap<>(64);
     private static final Matrix4f SHADOW_MV_JOML = new Matrix4f();
     private static final Matrix4f SHADOW_PROJ_JOML = new Matrix4f();
     private static final PoseStack SHADOW_POSE_STACK = new PoseStack();
 
-    private static Uniform stagedMatUniform0;
-    private static Uniform stagedMatUniform1;
-    private static int stagedMatSlot;
     private static Uniform activeChunkOffsetUniform;
     private static float stagedChunkX;
     private static float stagedChunkY;
     private static float stagedChunkZ;
+    private static int cachedLightmapTexId;
     private static boolean clientWired;
+
+    private static final GlStateSync BLAZE3D_SYNC = new GlStateSync() {
+        @Override
+        public void bindFramebuffer(final int target, final int fbo) {
+            GlStateManager._glBindFramebuffer(target, fbo);
+        }
+
+        @Override
+        public void viewport(final int x, final int y, final int width, final int height) {
+            GlStateManager._viewport(x, y, width, height);
+        }
+
+        @Override
+        public void useProgram(final int programId) {
+            GlStateManager._glUseProgram(programId);
+        }
+
+        @Override
+        public void bindTexture2D(final int unitIndex, final int textureId) {
+            if (unitIndex >= 0 && unitIndex < BLAZE3D_TRACKED_TEXTURE_UNITS) {
+                GlStateManager._activeTexture(GL13.GL_TEXTURE0 + unitIndex);
+                GlStateManager._bindTexture(textureId);
+            } else {
+                GL13.glActiveTexture(GL13.GL_TEXTURE0 + unitIndex);
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
+            }
+        }
+
+        @Override
+        public void activeTextureUnit0() {
+            GlStateManager._activeTexture(GL13.GL_TEXTURE0);
+        }
+
+        @Override
+        public void bindScratchTexture2D(final int textureId) {
+            GL13.glActiveTexture(SCRATCH_TEXTURE_UNIT);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
+        }
+
+        @Override
+        public void endScratchTexture2D() {
+            GL13.glActiveTexture(SCRATCH_TEXTURE_UNIT);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+            final int blazeUnit = GlStateManager._getActiveTexture();
+            GL13.glActiveTexture(blazeUnit >= GL13.GL_TEXTURE0 ? blazeUnit : GL13.GL_TEXTURE0);
+        }
+
+        @Override
+        public void bindVertexArray(final int vao) {
+            // VertexBuffer.unbind() invokes BufferUploader.invalidate() at bytecode offset 0!
+            VertexBuffer.unbind();
+            GlStateManager._glBindVertexArray(vao);
+        }
+
+        @Override
+        public void unbindVertexArray() {
+            VertexBuffer.unbind();
+        }
+
+        @Override
+        public void prepareForClear() {
+            GlStateManager._disableScissorTest();
+            GlStateManager._colorMask(true, true, true, true);
+            GlStateManager._depthMask(true);
+        }
+
+        @Override
+        public void prepareFullscreenQuadState() {
+            GlStateManager._disableScissorTest();
+            GlStateManager._disableDepthTest();
+            GlStateManager._depthMask(false);
+            GlStateManager._disableBlend();
+            GlStateManager._disableCull();
+            GlStateManager._colorMask(true, true, true, true);
+        }
+
+        @Override
+        public void restoreAfterFullscreenQuad() {
+            GlStateManager._depthMask(true);
+            GlStateManager._enableDepthTest();
+        }
+
+        @Override
+        public void prepareShadowPassState() {
+            GlStateManager._disableScissorTest();
+            GlStateManager._enableDepthTest();
+            GlStateManager._depthMask(true);
+            GlStateManager._disableBlend();
+            GlStateManager._disableCull();
+            GlStateManager._colorMask(true, true, true, true);
+        }
+
+        @Override
+        public void restoreAfterShadowPass() {
+            GlStateManager._enableCull();
+        }
+
+        @Override
+        public void restoreMainRenderTarget(final int mainFbo, final int mainWidth, final int mainHeight) {
+            final Minecraft mc = Minecraft.getInstance();
+            final RenderTarget mainTarget = mc != null ? mc.getMainRenderTarget() : null;
+            if (mainTarget != null && mainTarget.frameBufferId == mainFbo) {
+                mainTarget.bindWrite(true);
+            } else {
+                GlStateManager._glBindFramebuffer(org.lwjgl.opengl.GL30.GL_FRAMEBUFFER, mainFbo);
+                GlStateManager._viewport(0, 0, mainWidth, mainHeight);
+            }
+            GlStateManager._colorMask(true, true, true, true);
+            GlStateManager._depthMask(true);
+            GlStateManager._enableDepthTest();
+            GlStateManager._glUseProgram(0);
+            VertexBuffer.unbind();
+            GlStateManager._activeTexture(GL13.GL_TEXTURE0);
+        }
+    };
 
     private AgrisClientHooks() {
     }
@@ -68,6 +189,7 @@ public final class AgrisClientHooks {
             return;
         }
         clientWired = true;
+        GlStateSync.install(BLAZE3D_SYNC);
         Agris.initialize();
         IrisApiV0Impl.installScreenFactory(parent ->
                 new AgrisShaderPackScreen(parent instanceof Screen s ? s : null));
@@ -129,6 +251,9 @@ public final class AgrisClientHooks {
 
     public static void onWorldChanged(final ClientLevel newLevel) {
         ensureClientWired();
+        STAGED_MATRICES.clear();
+        activeChunkOffsetUniform = null;
+        cachedLightmapTexId = 0;
         if (newLevel == null) {
             Agris.pipeline().destroyPipeline();
         } else {
@@ -140,6 +265,7 @@ public final class AgrisClientHooks {
     public static void onBeginLevelRender(final LevelRenderer levelRenderer,
                                           final Camera camera,
                                           final float partialTick,
+                                          final LightTexture lightTexture,
                                           final Matrix4f cameraModelView,
                                           final Matrix4f cameraProjection) {
         ensureClientWired();
@@ -164,12 +290,17 @@ public final class AgrisClientHooks {
         }
 
         try {
+            // Ensure vanilla's lightmap texture is bound on shader slot 2 so prepare/deferred/composite/final
+            // passes always receive the real OpenGL lightmap texture ID rather than 0.
+            if (lightTexture != null) {
+                lightTexture.turnOnLightLayer();
+            }
             populateWorldUniforms(mc, mc.level, camera, partialTick, mgr.uniformState());
             cameraModelView.get(TMP_MV);
             cameraProjection.get(TMP_PROJ);
             final Vec3 pos = camera.getPosition();
             final float skyAngle = mc.level.getTimeOfDay(partialTick);
-            final int lightmapTex = RenderSystem.getShaderTexture(2);
+            final int lightmapTex = resolveLightmapTextureId();
 
             pipeline.beginWorldFrame(
                     mainTarget.frameBufferId,
@@ -220,7 +351,7 @@ public final class AgrisClientHooks {
         } else if (renderType == RenderType.cutout()) {
             pipeline.setPhase(WorldRenderingPhase.TERRAIN_CUTOUT);
         } else if (renderType == RenderType.translucent()) {
-            pipeline.onBeginTranslucents(RenderSystem.getShaderTexture(2));
+            pipeline.onBeginTranslucents(resolveLightmapTextureId());
             pipeline.setPhase(WorldRenderingPhase.TERRAIN_TRANSLUCENT);
         } else if (renderType == RenderType.tripwire()) {
             pipeline.setPhase(WorldRenderingPhase.TRIPWIRE);
@@ -230,6 +361,15 @@ public final class AgrisClientHooks {
     public static void onPhaseChange(final WorldRenderingPhase phase) {
         final ShaderPipeline pipeline = Agris.pipeline().activePipelineOrNull();
         if (pipeline != null && pipeline.isInsideWorldFrame() && !pipeline.isRenderingShadowPass()) {
+            if (phase == WorldRenderingPhase.SKY) {
+                final float[] fogCol = RenderSystem.getShaderFogColor();
+                if (fogCol != null && fogCol.length >= 3) {
+                    final UniformState u = pipeline.uniformState();
+                    u.fogColor[0] = fogCol[0];
+                    u.fogColor[1] = fogCol[1];
+                    u.fogColor[2] = fogCol[2];
+                }
+            }
             pipeline.setPhase(phase);
         }
     }
@@ -249,7 +389,7 @@ public final class AgrisClientHooks {
             return;
         }
         try {
-            pipeline.endWorldFrame(RenderSystem.getShaderTexture(2));
+            pipeline.endWorldFrame(resolveLightmapTextureId());
         } catch (final Throwable ex) {
             mgr.handleRuntimeRenderFailure(ex);
         }
@@ -259,50 +399,58 @@ public final class AgrisClientHooks {
         if (self == null || matrix == null) {
             return;
         }
+        // Always capture per-Uniform Matrix4f values without ring-buffer slot collisions:
+        // renderChunkLayer and VertexBuffer._drawWithShader set MODEL_VIEW_MATRIX,
+        // PROJECTION_MATRIX, and TEXTURE_MATRIX before calling ShaderInstance.apply().
+        float[] buf = STAGED_MATRICES.get(self);
+        if (buf == null) {
+            buf = new float[16];
+            STAGED_MATRICES.put(self, buf);
+        }
+        matrix.get(buf);
+    }
+
+    public static void onBeforeShaderApply() {
+        activeChunkOffsetUniform = null;
         final ShaderPipeline pipeline = Agris.pipeline().activePipelineOrNull();
-        if (pipeline == null || !pipeline.isInsideWorldFrame()) {
-            return;
+        if (pipeline != null && pipeline.isInsideWorldFrame()) {
+            pipeline.onBeforeVanillaShaderApply();
         }
-        if ((stagedMatSlot & 1) == 0) {
-            stagedMatUniform0 = self;
-            matrix.get(STAGED_MAT_0);
-        } else {
-            stagedMatUniform1 = self;
-            matrix.get(STAGED_MAT_1);
-        }
-        stagedMatSlot++;
     }
 
     public static void onShaderApply(final ShaderInstance instance) {
         final PipelineManager mgr = Agris.pipeline();
         final ShaderPipeline pipeline = mgr.activePipelineOrNull();
         if (pipeline == null || !pipeline.isInsideWorldFrame()) {
-            stagedMatUniform0 = null;
-            stagedMatUniform1 = null;
             activeChunkOffsetUniform = null;
             return;
         }
         try {
-            if (instance.MODEL_VIEW_MATRIX != null && instance.MODEL_VIEW_MATRIX == stagedMatUniform0) {
-                System.arraycopy(STAGED_MAT_0, 0, TMP_MV, 0, 16);
-            } else if (instance.MODEL_VIEW_MATRIX != null && instance.MODEL_VIEW_MATRIX == stagedMatUniform1) {
-                System.arraycopy(STAGED_MAT_1, 0, TMP_MV, 0, 16);
+            final float[] stagedMv = instance.MODEL_VIEW_MATRIX != null
+                    ? STAGED_MATRICES.get(instance.MODEL_VIEW_MATRIX) : null;
+            if (stagedMv != null) {
+                System.arraycopy(stagedMv, 0, TMP_MV, 0, 16);
             } else {
                 RenderSystem.getModelViewMatrix().get(TMP_MV);
             }
 
-            if (instance.PROJECTION_MATRIX != null && instance.PROJECTION_MATRIX == stagedMatUniform0) {
-                System.arraycopy(STAGED_MAT_0, 0, TMP_PROJ, 0, 16);
-            } else if (instance.PROJECTION_MATRIX != null && instance.PROJECTION_MATRIX == stagedMatUniform1) {
-                System.arraycopy(STAGED_MAT_1, 0, TMP_PROJ, 0, 16);
+            final float[] stagedProj = instance.PROJECTION_MATRIX != null
+                    ? STAGED_MATRICES.get(instance.PROJECTION_MATRIX) : null;
+            if (stagedProj != null) {
+                System.arraycopy(stagedProj, 0, TMP_PROJ, 0, 16);
             } else {
                 RenderSystem.getProjectionMatrix().get(TMP_PROJ);
             }
 
-            RenderSystem.getTextureMatrix().get(TMP_TEX);
+            final float[] stagedTex = instance.TEXTURE_MATRIX != null
+                    ? STAGED_MATRICES.get(instance.TEXTURE_MATRIX) : null;
+            if (stagedTex != null) {
+                System.arraycopy(stagedTex, 0, TMP_TEX, 0, 16);
+            } else {
+                RenderSystem.getTextureMatrix().get(TMP_TEX);
+            }
+
             pipeline.uniformState().setPerDrawMatrices(TMP_MV, TMP_PROJ, TMP_TEX);
-            stagedMatUniform0 = null;
-            stagedMatUniform1 = null;
 
             final UniformState u = pipeline.uniformState();
             final float[] shaderColor = RenderSystem.getShaderColor();
@@ -331,7 +479,7 @@ public final class AgrisClientHooks {
                     attrs,
                     RenderSystem.getShaderTexture(0),
                     RenderSystem.getShaderTexture(1),
-                    RenderSystem.getShaderTexture(2));
+                    resolveLightmapTextureId());
         } catch (final Throwable ex) {
             activeChunkOffsetUniform = null;
             mgr.handleRuntimeRenderFailure(ex);
@@ -339,13 +487,20 @@ public final class AgrisClientHooks {
     }
 
     public static void onShaderClear() {
-        stagedMatUniform0 = null;
-        stagedMatUniform1 = null;
         activeChunkOffsetUniform = null;
         final ShaderPipeline pipeline = Agris.pipeline().activePipelineOrNull();
         if (pipeline != null && pipeline.isInsideWorldFrame()) {
             pipeline.onVanillaShaderClear();
         }
+    }
+
+    private static int resolveLightmapTextureId() {
+        final int live = RenderSystem.getShaderTexture(2);
+        if (live > 0) {
+            cachedLightmapTexId = live;
+            return live;
+        }
+        return cachedLightmapTexId;
     }
 
     public static void onUniformSet3f(final Uniform self, final float x, final float y, final float z) {
