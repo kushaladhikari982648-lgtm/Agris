@@ -1,0 +1,24 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.agris.mixin.core",
+  "plugin": "com.agris.mixin.AgrisMixinPlugin",
+  "compatibilityLevel": "JAVA_17",
+  "client": [
+    "AetheriumPagesMixin",
+    "DebugScreenOverlayMixin",
+    "GameRendererMixin",
+    "KeyMappingAccessor",
+    "LevelRendererInvoker",
+    "LevelRendererMixin",
+    "MinecraftMixin",
+    "OptionsMixin",
+    "RenderSystemMixin",
+    "ShaderInstanceMixin",
+    "UniformMixin",
+    "VideoSettingsScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

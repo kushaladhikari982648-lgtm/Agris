@@ -1,0 +1,41 @@
+# Gradle
+.gradle/
+build/
+*/build/
+out/
+dist/
+run/
+runs/
+*.launchSettings.json
+fabric/.gradle/
+neoforge/.gradle/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath/
+.navigation/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*~
+*.swp
+
+# Scratch & local configs
+*.orig
+*.rej
+*.bad
+agris.json
+agris.json.bak
+benchmark-out/
+.jfr/
+*.jfr
+__pycache__/
+*.pyc
